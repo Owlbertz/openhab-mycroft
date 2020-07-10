@@ -1,1 +1,1 @@
-(?P<Command>open|close) (?P<Item>.*)
+(?P<Command>öffne|schließe) (?P<Item>.*)

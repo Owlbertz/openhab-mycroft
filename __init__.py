@@ -1,4 +1,4 @@
-# -*- coding: iso-8859-15 -*-
+# -*- encoding: utf-8 -*-
 
 #
 # Copyright (c) 2010-2019 Contributors to the openHAB project
@@ -60,6 +60,7 @@ class openHABSkill(MycroftSkill):
 		self.currentHumItemsDic = dict()
 		#self.currentThermostatItemsDic = dict()
 		self.targetTemperatureItemsDic = dict()
+		self.shutterItemsDic = dict()
 		#self.homekitHeatingCoolingModeDic = dict()
 
 	def initialize(self):
@@ -85,6 +86,9 @@ class openHABSkill(MycroftSkill):
 
 		dimmer_status_intent = IntentBuilder("Dimmer_StatusIntent").require("DimmerStatusKeyword").require("Item").optionally("BrightPercentage").build()
 		self.register_intent(dimmer_status_intent, self.handle_dimmer_status_intent)
+
+		openclose_status_intent = IntentBuilder("OpenClose_StatusIntent").require("Command").require("Item").build()
+		self.register_intent(openclose_status_intent, self.handle_openclose_status_intent)
 
 		#what_status_intent = IntentBuilder("What_StatusIntent").require("WhatStatusKeyword").require("Item").require("RequestType").build()
 		#self.register_intent(what_status_intent, self.handle_what_status_intent)
@@ -201,12 +205,18 @@ class openHABSkill(MycroftSkill):
 		#to refresh the openHAB items labeled list we use an intent, we can ask Mycroft to make the refresh
 
 		self.getTaggedItems()
-		dictLenght = str(len(self.lightingItemsDic) + len(self.switchableItemsDic) + len(self.currentTempItemsDic) + len(self.currentHumItemsDic) + len(self.currentThermostatItemsDic) + len(self.targetTemperatureItemsDic) + len(self.homekitHeatingCoolingModeDic))
+		dictLenght = str(len(self.lightingItemsDic) + len(self.switchableItemsDic) + len(self.currentTempItemsDic) + len(self.currentHumItemsDic) + len(self.currentThermostatItemsDic) + len(self.targetTemperatureItemsDic) + len(self.homekitHeatingCoolingModeDic) + len(self.shutterItemsDic))
 		self.speak_dialog('RefreshTaggedItems', {'number_item': dictLenght})
 
 	def handle_onoff_status_intent(self, message):
 		command = message.data.get('Command')
 		messageItem = message.data.get('Item')
+
+		# DE translation for ON/OFF
+		if (command == "an") or (command == "ein"):
+			command = "on"
+		elif (command == "aus"):
+			command = "off"
 
 		#We have to find the item to update from our dictionaries
 		self.lightingSwitchableItemsDic = dict()
@@ -237,22 +247,25 @@ class openHABSkill(MycroftSkill):
 		command = message.data.get('Command')
 		messageItem = message.data.get('Item')
 
+		# DE translation for UP/DOWN
+		ohCommand = command
+		if self.voc_match(command, 'Close'):
+			ohCommand = "down"
+		elif self.voc_match(command, 'Open'):
+			ohCommand = "up"
+
 		ohItem = self.findItemName(self.shutterItemsDic, messageItem)
 
 		if ohItem != None:
-			if (command != "open") and (command != "close"):
-				self.speak_dialog('ErrorDialog')
+			statusCode = self.sendCommandToItem(ohItem, ohCommand.upper())
+			if statusCode == 200:
+				self.speak_dialog('OpenClose', {'command': command, 'item': messageItem})
+			elif statusCode == 404:
+				LOGGER.error("Some issues with the command execution!. Item not found")
+				self.speak_dialog('ItemNotFoundError')
 			else:
-				commandToSend = command == "open" ? "up" : "down"
-				statusCode = self.sendCommandToItem(ohItem, commandToSend.upper())
-				if statusCode == 200:
-					self.speak_dialog('OpenClose', {'command': command, 'item': messageItem})
-				elif statusCode == 404:
-					LOGGER.error("Some issues with the command execution!. Item not found")
-					self.speak_dialog('ItemNotFoundError')
-				else:
-					LOGGER.error("Some issues with the command execution!")
-					self.speak_dialog('CommunicationError')
+				LOGGER.error("Some issues with the command execution!")
+				self.speak_dialog('CommunicationError')
 		else:
 			LOGGER.error("Item not found!")
 			self.speak_dialog('ItemNotFoundError')
