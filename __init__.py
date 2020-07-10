@@ -120,6 +120,7 @@ class openHABSkill(MycroftSkill):
 		self.currentHumItemsDic = {}
 		self.currentThermostatItemsDic = {}
 		self.targetTemperatureItemsDic = {}
+		self.shutterItemsDic = {}
 		self.homekitHeatingCoolingModeDic = {}
 
 		if self.url == None:
@@ -145,6 +146,8 @@ class openHABSkill(MycroftSkill):
 							self.currentThermostatItemsDic.update({json_response[x]['name']: json_response[x]['label']})
 						elif ("TargetTemperature" in json_response[x]['tags']):
 							self.targetTemperatureItemsDic.update({json_response[x]['name']: json_response[x]['label']})
+						elif ("Shutter" in json_response[x]['tags']):
+							self.shutterItemsDic.update({json_response[x]['name']: json_response[x]['label']})
 						elif ("homekit:HeatingCoolingMode" in json_response[x]['tags']):
 							self.homekitHeatingCoolingModeDic.update({json_response[x]['name']: json_response[x]['label']})
 						else:
@@ -190,6 +193,7 @@ class openHABSkill(MycroftSkill):
 		msg = msg.strip() + ' ' + self.getItemsFromDict("Current Humidity", self.currentHumItemsDic) + "\n"
 		msg = msg.strip() + ' ' + self.getItemsFromDict("Thermostat", self.currentThermostatItemsDic) + "\n"
 		msg = msg.strip() + ' ' + self.getItemsFromDict("Target Temperature", self.targetTemperatureItemsDic) + "\n"
+		msg = msg.strip() + ' ' + self.getItemsFromDict("Shutters", self.shutterItemsDic) + "\n"
 		msg = msg.strip() + ' ' + self.getItemsFromDict("Homekit Heating and Cooling", self.homekitHeatingCoolingModeDic)
 		self.speak_dialog('FoundItems', {'items': msg.strip()})
 
@@ -218,6 +222,31 @@ class openHABSkill(MycroftSkill):
 				statusCode = self.sendCommandToItem(ohItem, command.upper())
 				if statusCode == 200:
 					self.speak_dialog('StatusOnOff', {'command': command, 'item': messageItem})
+				elif statusCode == 404:
+					LOGGER.error("Some issues with the command execution!. Item not found")
+					self.speak_dialog('ItemNotFoundError')
+				else:
+					LOGGER.error("Some issues with the command execution!")
+					self.speak_dialog('CommunicationError')
+		else:
+			LOGGER.error("Item not found!")
+			self.speak_dialog('ItemNotFoundError')
+
+
+	def handle_openclose_status_intent(self, message):
+		command = message.data.get('Command')
+		messageItem = message.data.get('Item')
+
+		ohItem = self.findItemName(self.shutterItemsDic, messageItem)
+
+		if ohItem != None:
+			if (command != "open") and (command != "close"):
+				self.speak_dialog('ErrorDialog')
+			else:
+				commandToSend = command == "open" ? "up" : "down"
+				statusCode = self.sendCommandToItem(ohItem, commandToSend.upper())
+				if statusCode == 200:
+					self.speak_dialog('OpenClose', {'command': command, 'item': messageItem})
 				elif statusCode == 404:
 					LOGGER.error("Some issues with the command execution!. Item not found")
 					self.speak_dialog('ItemNotFoundError')
